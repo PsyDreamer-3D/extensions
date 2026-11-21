@@ -1,0 +1,9 @@
+# Add-on repositories listed in the PsyDreamer-3D extensions index, one per line.
+#
+# Each must be public (Blender downloads anonymously) and publish its extension .zip as an
+# asset on its latest GitHub Release; the release workflow from blender-addon-scaffold does.
+# Adding a line here republishes the index (see .github/workflows/publish.yml).
+
+PsyDreamer-3D/poser_tools
+PsyDreamer-3D/wp_armature_tools
+PsyDreamer-3D/archimesh_pd3d

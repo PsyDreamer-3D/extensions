@@ -1,0 +1,90 @@
+name: Publish extensions index
+
+# One Blender remote repository for every PsyDreamer-3D add-on listed in extensions.txt:
+#   https://psydreamer-3d.github.io/extensions/index.json
+#
+# Downloads the extension .zip from each add-on's latest GitHub Release, generates the index with
+# Blender's own `extension server-generate` (its schema is what Blender validates when syncing; a
+# hand-written generator's index was refused), and publishes index.json, index.html and the zips to
+# GitHub Pages. The zips are copied, not linked: server-generate writes relative "./<zip>" archive
+# URLs, so they must sit next to the index. Blender downloads anonymously, so this repo, its Pages
+# site and every listed add-on repo must be public.
+
+on:
+  # A new add-on release shows up within a day without any change to the add-on's own workflow.
+  schedule:
+    - cron: "17 6 * * *"
+  # An add-on's release workflow can publish at once instead (README: "Publishing right away").
+  repository_dispatch:
+    types: [extension-released]
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - extensions.txt
+      - .github/workflows/publish.yml
+
+# One deployment at a time; a newer run waits rather than cancelling one mid-deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Bump this when a newer stable Blender release is available:
+  # https://download.blender.org/release/
+  BLENDER_VERSION: "5.1.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Blender
+        run: |
+          blender_minor="${BLENDER_VERSION%.*}"
+          wget -q "https://download.blender.org/release/Blender${blender_minor}/blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          tar -xf "blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+          sudo mv "blender-${BLENDER_VERSION}-linux-x64" /opt/blender
+          sudo ln -s /opt/blender/blender /usr/local/bin/blender
+          blender --version
+
+      - name: Collect each add-on's latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # A listed add-on whose latest release has no .zip fails the run: publishing an index
+          # that silently dropped it would look like the add-on had been withdrawn.
+          grep -Ev '^[[:space:]]*(#|$)' extensions.txt | while read -r repo; do
+            tag=$(gh release view --repo "$repo" --json tagName --jq .tagName)
+            echo "$repo $tag"
+            gh release download "$tag" --repo "$repo" --pattern '*.zip' --dir dist
+          done
+          ls -l dist
+
+      - name: Generate the index
+        run: |
+          blender --command extension server-generate --repo-dir dist --html
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
