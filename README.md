@@ -34,14 +34,15 @@ workflow changes, and on demand (**Actions → Publish extensions index → Run 
 release workflow from `blender-addon-scaffold` does both the build and the upload). Add its
 `owner/name` to `extensions.txt`.
 
-**Publishing right away:** a new release otherwise appears within a day. To publish at once, an
-add-on's release workflow can end with a step that triggers this one. It needs a fine-grained
-token with **Contents: read and write** on this repository, stored in the add-on repo as the secret
-`EXTENSIONS_DISPATCH_TOKEN`:
+**Publishing right away:** each add-on's release workflow ends with a step that triggers this one
+(`repository_dispatch`, event `extension-released`), so a release is listed as soon as its zip is up.
+That step uses the organization secret `EXTENSIONS_DISPATCH_TOKEN`; until the secret exists it prints
+a notice and does nothing, and the daily run lists the release. The token is a fine-grained personal
+access token owned by PsyDreamer-3D, with access to only this repository and **Contents: Read and
+write**, stored as an organization secret the add-on repos can use:
 
-```yaml
-      - name: Republish the PsyDreamer-3D extensions index
-        env:
-          GH_TOKEN: ${{ secrets.EXTENSIONS_DISPATCH_TOKEN }}
-        run: gh api repos/PsyDreamer-3D/extensions/dispatches -f event_type=extension-released
+```bash
+gh secret set EXTENSIONS_DISPATCH_TOKEN --org PsyDreamer-3D --repos poser_tools,wp_armature_tools,archimesh_pd3d
 ```
+
+(`gh` asks for the token's value.) A new add-on's repo has to be added to that secret's list too.
